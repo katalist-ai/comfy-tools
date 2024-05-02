@@ -1,9 +1,11 @@
 from copy import deepcopy
 
+import cv2
 import numpy as np
 import torch
 from skimage.morphology import convex_hull_image
-import cv2
+
+from .pose_utils import draw_poses, decode_json_as_poses
 
 
 def dilate_mask(mask, n):
@@ -15,7 +17,6 @@ def dilate_mask(mask, n):
 
 def filter_poses(pose_keypoints, n_poses):
     pose_keypoints = deepcopy(pose_keypoints)
-    drop_ids = set()
     sizes = []
     for i, person in enumerate(pose_keypoints[0]["people"]):
         points = person["pose_keypoints_2d"]
@@ -52,39 +53,40 @@ class MaskFromPoints:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pose_keypoints": ("POSE_KEYPOINT",),
+                "pose_keypoint": ("POSE_KEYPOINT",),
                 "n_poses": ("INT", {
                     "default": 1,
                     "min": 1,  # Minimum value
-                    "max": 5,  # Maximum value
+                    "max": 10,  # Maximum value
                     "step": 1,  # Slider's step
                     "display": "number"  # Cosmetic only: display as "number" or "slider"
                 }),
                 "dilate_iterations": ("INT", {
                     "default": 1,
                     "min": 0,  # Minimum value
-                    "max": 10,  # Maximum value
+                    "max": 30,  # Maximum value
                     "step": 1,  # Slider's step
                     "display": "number"  # Cosmetic only: display as "number" or "slider"
                 }),
             },
         }
 
-    RETURN_TYPES = ("MASK", "MASK", "MASK", "MASK", "MASK")
-    RETURN_NAMES = ("mask1", "mask2", "mask3", "mask4", "mask5")
+    RETURN_TYPES = ("IMAGE", "MASK", "MASK", "MASK", "MASK", "MASK")
+    RETURN_NAMES = ("image", "mask1", "mask2", "mask3", "mask4", "mask5")
     FUNCTION = "poses_to_masks"
     CATEGORY = "Katalist Tools"
 
-    def poses_to_masks(self, pose_keypoints, n_poses, dilate_iterations):
-        height = pose_keypoints[0]['canvas_height']
-        width = pose_keypoints[0]['canvas_width']
-        poses = filter_poses(pose_keypoints, n_poses)
+    def poses_to_masks(self, pose_keypoint, n_poses, dilate_iterations):
+        height = pose_keypoint[0]['canvas_height']
+        width = pose_keypoint[0]['canvas_width']
+        poses = filter_poses(pose_keypoint, n_poses)
+        poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
+        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
         all_masks = []
         for person in poses[0]["people"]:
-            points = person["pose_keypoints_2d"]
-            # x, y, confidence
+            body_points = person["pose_keypoints_2d"]
             visible_points = []
-            for x, y, c in zip(points[0::3], points[1::3], points[2::3]):
+            for x, y, c in zip(body_points[0::3], body_points[1::3], body_points[2::3]):
                 if c == 1:
                     visible_points.append((x, y))
             img = np.zeros((height, width), dtype=np.uint8)
@@ -108,13 +110,38 @@ class MaskFromPoints:
             all_masks.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):
             all_masks[i] = torch.tensor(all_masks[i]).unsqueeze(0)
-        return all_masks[0], all_masks[1], all_masks[2], all_masks[3], all_masks[4]
-    # @classmethod
-    # def IS_CHANGED(s, image, string_field, int_field, float_field, print_to_screen):
-    #    return ""
+        return torch.tensor(pose_image).unsqueeze(0), all_masks[0], all_masks[1], all_masks[2], all_masks[3], all_masks[
+            4]
 
-# Set the web directory, any .js file in that directory will be loaded by the frontend as a frontend extension
-# WEB_DIRECTORY = "./somejs"
 
-# A dictionary that contains all nodes you want to export with their names
-# NOTE: names should be globally unique
+class FilterPoses:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pose_keypoint": ("POSE_KEYPOINT",),
+                "n_poses": ("INT", {
+                    "default": 1,
+                    "min": 1,  # Minimum value
+                    "max": 10,  # Maximum value
+                    "step": 1,  # Slider's step
+                    "display": "number"  # Cosmetic only: display as "number" or "slider"
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "POSE_KEYPOINT")
+    RETURN_NAMES = ("image", "POSE_KEYPOINT")
+    FUNCTION = "filter_poses"
+    CATEGORY = "Katalist Tools"
+
+    def filter_poses(self, pose_keypoint, n_poses):
+        height = pose_keypoint[0]['canvas_height']
+        width = pose_keypoint[0]['canvas_width']
+        poses = filter_poses(pose_keypoint, n_poses)
+        poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
+        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
+        return torch.tensor(pose_image).unsqueeze(0), poses
