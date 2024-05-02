@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from skimage.morphology import convex_hull_image
 
+from util import HWC3
 from .pose_utils import draw_poses, decode_json_as_poses
 
 
@@ -82,6 +83,8 @@ class MaskFromPoints:
         poses = filter_poses(pose_keypoint, n_poses)
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
+        pose_image = HWC3(pose_image)
+        pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
         all_masks = []
         for person in poses[0]["people"]:
             body_points = person["pose_keypoints_2d"]
@@ -110,8 +113,8 @@ class MaskFromPoints:
             all_masks.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):
             all_masks[i] = torch.tensor(all_masks[i]).unsqueeze(0)
-        return torch.tensor(pose_image).unsqueeze(0), all_masks[0], all_masks[1], all_masks[2], all_masks[3], all_masks[
-            4]
+        return (pose_image, all_masks[0],
+                all_masks[1], all_masks[2], all_masks[3], all_masks[4])
 
 
 class FilterPoses:
@@ -144,4 +147,5 @@ class FilterPoses:
         poses = filter_poses(pose_keypoint, n_poses)
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
+        pose_image = HWC3(pose_image)
         return torch.tensor(pose_image).unsqueeze(0), poses
