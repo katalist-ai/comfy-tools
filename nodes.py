@@ -1,7 +1,9 @@
-from skimage.morphology import convex_hull_image
 from copy import deepcopy
+
 import numpy as np
 import torch
+from skimage.morphology import convex_hull_image
+
 
 def filter_poses(pose_keypoints, n_poses):
     pose_keypoints = deepcopy(pose_keypoints)
@@ -33,7 +35,7 @@ def filter_poses(pose_keypoints, n_poses):
         if i not in drop_ids:
             new_people.append(person)
     pose_keypoints[0]["people"] = new_people
-    return (pose_keypoints,)
+    return pose_keypoints
 
 
 class MaskFromPoints:
@@ -62,7 +64,9 @@ class MaskFromPoints:
     FUNCTION = "poses_to_masks"
     CATEGORY = "Katalist Tools"
 
-    def poses_to_masks(self, pose_keypoints, n_poses, width, height):
+    def poses_to_masks(self, pose_keypoints, n_poses):
+        height = pose_keypoints[0]['canvas_height']
+        width = pose_keypoints[0]['canvas_width']
         poses = filter_poses(pose_keypoints, n_poses)
         all_masks = []
         for person in poses[0]["people"]:
@@ -74,12 +78,21 @@ class MaskFromPoints:
                     visible_points.append((x, y))
             img = np.zeros((height, width), dtype=np.uint8)
             for x, y in visible_points:
+                if y >= height:
+                    y = height - 1
+                if y < 0:
+                    y = 0
+                if x >= width:
+                    x = width - 1
+                if x < 0:
+                    x = 0
                 img[int(y), int(x)] = 1
             mask = convex_hull_image(img)
+            mask = mask.astype(np.float32)
             all_masks.append(mask)
             # create convex hull around the points
         while len(all_masks) < 5:
-            all_masks.append(np.zeros((height, width), dtype=np.uint8))
+            all_masks.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):
             all_masks[i] = torch.tensor(all_masks[i]).unsqueeze(0)
         return tuple(all_masks)
@@ -94,10 +107,10 @@ class MaskFromPoints:
 # A dictionary that contains all nodes you want to export with their names
 # NOTE: names should be globally unique
 NODE_CLASS_MAPPINGS = {
-    "Example": Example
+    "MaskFromPoints": MaskFromPoints
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Example": "Example Node"
+    "MaskFromPoints": "Mask From Points"
 }
