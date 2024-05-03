@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from skimage.morphology import convex_hull_image
 
-from util import HWC3
+from .util import HWC3
 from .pose_utils import draw_poses, decode_json_as_poses
 
 
