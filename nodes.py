@@ -22,22 +22,27 @@ def filter_poses(pose_keypoints, n_poses):
     for i, person in enumerate(pose_keypoints[0]["people"]):
         points = person["pose_keypoints_2d"]
         # x, y, confidence
-        leftmost = 0
-        rightmost = float("inf")
-        topmost = 0
-        bottommost = float("inf")
+        leftmost = pose_keypoints[0]['canvas_width']
+        rightmost = 0
+        topmost = pose_keypoints[0]['canvas_height']
+        bottommost = 0
+        visible_points = len([c for c in points[2::3] if c == 1])
+        if visible_points < 3:
+            continue
         for x, y, c in zip(points[0::3], points[1::3], points[2::3]):
+            print(x, y, c)
             if c == 1:
-                if x < rightmost:
+                if x > rightmost:
                     rightmost = x
-                if x > leftmost:
+                if x < leftmost:
                     leftmost = x
-                if y < bottommost:
+                if y > bottommost:
                     bottommost = y
-                if y > topmost:
+                if y < topmost:
                     topmost = y
         sizes.append((i, (leftmost - rightmost) * (topmost - bottommost), (leftmost + rightmost) // 2))
     sizes = sorted(sizes, reverse=True, key=lambda ss: ss[1])[:n_poses]
+    print(sizes)
     sizes = sorted(sizes, key=lambda ss: ss[2])
     new_people = []
     for i, _, _ in sizes:
