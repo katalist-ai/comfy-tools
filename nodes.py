@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 
 import cv2
@@ -5,8 +6,8 @@ import numpy as np
 import torch
 from skimage.morphology import convex_hull_image
 
-from .util import HWC3
 from .pose_utils import draw_poses, decode_json_as_poses
+from .util import HWC3
 
 
 def dilate_mask(mask, n):
@@ -30,7 +31,6 @@ def filter_poses(pose_keypoints, n_poses):
         if visible_points < 3:
             continue
         for x, y, c in zip(points[0::3], points[1::3], points[2::3]):
-            print(x, y, c)
             if c == 1:
                 if x > rightmost:
                     rightmost = x
@@ -42,7 +42,6 @@ def filter_poses(pose_keypoints, n_poses):
                     topmost = y
         sizes.append((i, (leftmost - rightmost) * (topmost - bottommost), (leftmost + rightmost) // 2))
     sizes = sorted(sizes, reverse=True, key=lambda ss: ss[1])[:n_poses]
-    print(sizes)
     sizes = sorted(sizes, key=lambda ss: ss[2])
     new_people = []
     for i, _, _ in sizes:
@@ -154,3 +153,45 @@ class FilterPoses:
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
         pose_image = HWC3(pose_image)
         return torch.tensor(pose_image).unsqueeze(0), poses
+
+
+class LoadPosesJSON:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pose_keypoint": ("STRING", {"multiline": True}),
+            },
+        }
+
+    RETURN_TYPES = ("POSE_KEYPOINT",)
+    RETURN_NAMES = ("pose_keypoint", "POSE_KEYPOINT")
+    FUNCTION = "load_poses_json"
+    CATEGORY = "Katalist Tools"
+
+    def validate_poses(self, pose_keypoint):
+        if isinstance(pose_keypoint, list):
+            pose_keypoint = pose_keypoint[0]
+        if "people" not in pose_keypoint:
+            raise ValueError("people not found")
+        for person in pose_keypoint["people"]:
+            if "pose_keypoints_2d" not in person:
+                raise ValueError("pose_keypoints_2d not found")
+            if len(person["pose_keypoints_2d"]) != 54:
+                raise ValueError("pose_keypoints_2d should have 54 numbers")
+        if "canvas_width" not in pose_keypoint:
+            raise ValueError("canvas_width not found")
+        if "canvas_height" not in pose_keypoint:
+            raise ValueError("canvas_height not found")
+        return True
+
+    def load_poses_json(self, pose_keypoint):
+        pose_dict = json.loads(pose_keypoint)
+        self.validate_poses(pose_dict)
+        if not isinstance(pose_dict, list):
+            pose_dict = [pose_dict]
+        print(pose_dict, type(pose_dict))
+        return (pose_dict,)
