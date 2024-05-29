@@ -18,6 +18,12 @@ def dilate_mask(mask, n):
 
 
 def filter_poses(pose_keypoints, n_poses):
+    """
+    Filter poses by size, include only the n_poses largest poses and also sort them left to right
+    :param pose_keypoints: OpenPose JSON output
+    :param n_poses: int, number of poses to keep
+    :return: pose_keypoints with only n_poses largest poses, sorted
+    """
     pose_keypoints = deepcopy(pose_keypoints)
     sizes = []
     for i, person in enumerate(pose_keypoints[0]["people"]):
@@ -74,21 +80,26 @@ class MaskFromPoints:
                     "display": "number"  # Cosmetic only: display as "number" or "slider"
                 }),
             },
+            "optional": {
+                "mask_mapping": ("MAPPING",),
+            }
         }
 
     RETURN_TYPES = ("IMAGE", "MASK", "MASK", "MASK", "MASK", "MASK")
-    RETURN_NAMES = ("image", "mask1", "mask2", "mask3", "mask4", "mask5")
+    RETURN_NAMES = ("IMAGE", "MASK1", "MASK2", "MASK3", "MASK4", "MASK5")
     FUNCTION = "poses_to_masks"
     CATEGORY = "Katalist Tools"
 
-    def poses_to_masks(self, pose_keypoint, n_poses, dilate_iterations):
+    def poses_to_masks(self, pose_keypoint, n_poses, dilate_iterations, mask_mapping=None):
         height = pose_keypoint[0]['canvas_height']
         width = pose_keypoint[0]['canvas_width']
-        poses = filter_poses(pose_keypoint, n_poses)
-        poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
-        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
-        pose_image = HWC3(pose_image)
-        pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
+        max_poses = None
+        if mask_mapping is None:
+            max_poses = n_poses
+            mask_mapping = [(i, i) for i in range(n_poses)]
+        mask_mapping = sorted(mask_mapping, key=lambda p: p[0])
+        idxes = set([m[1] for m in mask_mapping])
+        poses = filter_poses(pose_keypoint, max_poses)
         all_masks = []
         for person in poses[0]["people"]:
             body_points = person["pose_keypoints_2d"]
@@ -113,12 +124,21 @@ class MaskFromPoints:
             if dilate_iterations > 0:
                 mask = dilate_mask(mask, dilate_iterations)
             all_masks.append(mask)
-        while len(all_masks) < 5:
-            all_masks.append(np.zeros((height, width), dtype=np.float32))
+        all_masks_mapped = []
+        poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
+        poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxes]
+        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
+        pose_image = HWC3(pose_image)
+        pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
+        for mapping in mask_mapping:
+            if mapping[1] < len(all_masks):
+                all_masks_mapped.append(all_masks[mapping[1]])
+        while len(all_masks_mapped) < 5:
+            all_masks_mapped.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):
-            all_masks[i] = torch.tensor(all_masks[i]).unsqueeze(0)
-        return (pose_image, all_masks[0],
-                all_masks[1], all_masks[2], all_masks[3], all_masks[4])
+            all_masks_mapped[i] = torch.tensor(all_masks_mapped[i]).unsqueeze(0)
+        return (pose_image, all_masks_mapped[0],
+                all_masks_mapped[1], all_masks_mapped[2], all_masks_mapped[3], all_masks_mapped[4])
 
 
 class FilterPoses:
@@ -130,6 +150,7 @@ class FilterPoses:
         return {
             "required": {
                 "pose_keypoint": ("POSE_KEYPOINT",),
+                "permutation": ("PERMUTATION",),
                 "n_poses": ("INT", {
                     "default": 1,
                     "min": 1,  # Minimum value
