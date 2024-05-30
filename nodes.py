@@ -76,6 +76,38 @@ def filter_poses(pose_keypoints, n_poses):
     pose_keypoints[0]["people"] = new_people
     return pose_keypoints
 
+def filter_masks(masks, face_bbox: list[list[int]]):
+    """
+    Filter masks to only include the faces in face_bbox regions
+    :param masks: list of mask images
+    :param face_bbox: list of bboxes, [[x1, y1, x2, y2], ...] - upper left and bottom right corners of the face bounding box
+    """
+    if face_bbox is None:
+        print("No face bbox")
+        return masks, list(range(len(masks)))
+    print("NMASKS", len(masks))
+    print("FACE BBOX", face_bbox)
+    new_masks = []
+    idxs = []
+    for bbox in face_bbox:
+        best_idx = -1
+        best_coverage = 0
+        for i, mask in enumerate(masks):
+            bbox_img = np.zeros_like(mask, dtype=np.uint8)
+            bbox_img[bbox[1]:bbox[3], bbox[0]:bbox[2]] = 1
+            intersection = np.logical_and(mask, bbox_img)
+            union = np.logical_or(mask, bbox_img)
+            size = np.sum(intersection) / np.sum(union)
+            print("SIZE: ", size)
+            if size > best_coverage:
+                best_coverage = size
+                best_idx = i
+        if best_idx != -1:
+            print(best_idx, best_coverage)
+            new_masks.append(masks[best_idx])
+            idxs.append(best_idx)
+    return new_masks, idxs
+
 
 class MaskFromPoints:
     def __init__(self):
@@ -93,6 +125,20 @@ class MaskFromPoints:
             "required": {
                 "pose_keypoint": ("POSE_KEYPOINT",),
                 "use_keypoints": (["full-body", "face+shoulders", "face+torso", "face"], {'default': 'face+shoulders'}),
+                "mask_width": ("INT", {
+                    "default": 1,
+                    "min": 0,  # Minimum value
+                    "max": 2000,  # Maximum value
+                    "step": 1,  # Slider's step
+                    "display": "number"  # Cosmetic only: display as "number" or "slider"
+                }),
+                "mask_height": ("INT", {
+                    "default": 1,
+                    "min": 0,  # Minimum value
+                    "max": 2000,  # Maximum value
+                    "step": 1,  # Slider's step
+                    "display": "number"  # Cosmetic only: display as "number" or "slider"
+                }),
                 "n_poses": ("INT", {
                     "default": 1,
                     "min": 1,  # Minimum value
@@ -110,6 +156,7 @@ class MaskFromPoints:
             },
             "optional": {
                 "mask_mapping": ("MAPPING",),
+                "face_bbox": ("BBOXLIST",),
             }
         }
 
@@ -118,7 +165,8 @@ class MaskFromPoints:
     FUNCTION = "poses_to_masks"
     CATEGORY = "Katalist Tools"
 
-    def poses_to_masks(self, pose_keypoint, use_keypoints, n_poses, dilate_iterations, mask_mapping=None):
+    def poses_to_masks(self, pose_keypoint, use_keypoints, mask_width, mask_height, n_poses, dilate_iterations, mask_mapping=None, face_bbox=None):
+        print("STARY")
         height = pose_keypoint[0]['canvas_height']
         width = pose_keypoint[0]['canvas_width']
         max_poses = None
@@ -126,7 +174,6 @@ class MaskFromPoints:
             max_poses = n_poses
             mask_mapping = [(i, i) for i in range(n_poses)]
         mask_mapping = sorted(mask_mapping, key=lambda p: p[0])
-        idxes = set([m[1] for m in mask_mapping])
         poses = filter_poses(pose_keypoint, max_poses)
         all_masks = []
         for person in poses[0]["people"]:
@@ -147,14 +194,16 @@ class MaskFromPoints:
                 if x < 0:
                     x = 0
                 img[int(y), int(x)] = 1
-            mask = convex_hull_image(img)
-            mask = mask.astype(np.float32)
+            mask = convex_hull_image(img).astype(np.uint8)
             if dilate_iterations > 0:
                 mask = dilate_mask(mask, dilate_iterations)
+            mask = cv2.resize(mask, (mask_width, mask_height), interpolation=cv2.INTER_NEAREST)
             all_masks.append(mask)
+        # mask sizes should be the same as the bbox source image
+        all_masks, idxs = filter_masks(all_masks, face_bbox)
         all_masks_mapped = []
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
-        poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxes]
+        poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxs]
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=False)
         pose_image = HWC3(pose_image)
         pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
@@ -164,6 +213,7 @@ class MaskFromPoints:
         while len(all_masks_mapped) < 5:
             all_masks_mapped.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):
+            # all_masks_mapped[i] = all_masks_mapped[i].astype(np.float32)
             all_masks_mapped[i] = torch.tensor(all_masks_mapped[i]).unsqueeze(0)
         return (pose_image, all_masks_mapped[0],
                 all_masks_mapped[1], all_masks_mapped[2], all_masks_mapped[3], all_masks_mapped[4])

@@ -17,3 +17,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FaceMatcher": "Face Matcher",
     "ShowPermutation": "Show Permutation"
 }
+
+__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
+
+try:
+    import cm_global
+    cm_global.register_extension('Katalist-comfy-tools',
+                                 {'version': "0.0.1",
+                                  'name': 'Katalist Tools',
+                                  'nodes': set(NODE_CLASS_MAPPINGS.keys()),
+                                  'description': 'Custom nodes for KatalistAI studio backend workflows', })
+except:
+    pass
