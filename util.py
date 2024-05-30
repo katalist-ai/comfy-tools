@@ -1,6 +1,10 @@
 import numpy as np
 
 
+def select_from_idx(elements: list, idx: list):
+    return [elements[i] for i in idx]
+
+
 def HWC3(x):
     assert x.dtype == np.uint8
     if x.ndim == 2:
