@@ -24,6 +24,8 @@ def get_visible_keypoints(keypoints_list, keep_only: list = None):
     :param keep_only: list of indices to keep, if None keep all
     :return: list of visible keypoints
     """
+    if keypoints_list is None:
+        return []
     if keep_only is not None:
         keep_only = set(keep_only)
     else:
