@@ -199,11 +199,12 @@ class MaskFromPoints:
                 mask = dilate_mask(mask, dilate_iterations)
             mask = cv2.resize(mask, (mask_width, mask_height), interpolation=cv2.INTER_NEAREST)
             all_masks.append(mask)
-        # mask sizes should be the same as the bbox source image
-        all_masks, idxs = filter_masks(all_masks, face_bbox)
-        all_masks_mapped = []
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
-        poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxs]
+        all_masks_mapped = []
+        if face_bbox is not None:
+            # mask sizes should be the same as the bbox source image
+            all_masks, idxs = filter_masks(all_masks, face_bbox)
+            poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxs]
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=False)
         pose_image = HWC3(pose_image)
         pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
