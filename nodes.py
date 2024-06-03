@@ -98,12 +98,10 @@ def filter_masks(masks, face_bbox: list[list[int]]):
             intersection = np.logical_and(mask, bbox_img)
             union = np.logical_or(mask, bbox_img)
             size = np.sum(intersection) / np.sum(union)
-            print("SIZE: ", size)
             if size > best_coverage:
                 best_coverage = size
                 best_idx = i
         if best_idx != -1:
-            print(best_idx, best_coverage)
             new_masks.append(masks[best_idx])
             idxs.append(best_idx)
     return new_masks, idxs
@@ -166,7 +164,6 @@ class MaskFromPoints:
     CATEGORY = "Katalist Tools"
 
     def poses_to_masks(self, pose_keypoint, use_keypoints, mask_width, mask_height, n_poses, dilate_iterations, mask_mapping=None, face_bbox=None):
-        print("STARY")
         height = pose_keypoint[0]['canvas_height']
         width = pose_keypoint[0]['canvas_width']
         max_poses = None
