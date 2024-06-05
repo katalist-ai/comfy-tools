@@ -7,7 +7,7 @@ import torch
 from skimage.morphology import convex_hull_image
 
 from .pose_utils import draw_poses, decode_json_as_poses
-from .util import HWC3, select_from_idx
+from .util import HWC3
 
 
 def dilate_mask(mask, n):
@@ -76,6 +76,7 @@ def filter_poses(pose_keypoints, n_poses):
     pose_keypoints[0]["people"] = new_people
     return pose_keypoints
 
+
 def filter_masks(masks, face_bbox: list[list[int]]):
     """
     Filter masks to only include the faces in face_bbox regions
@@ -105,6 +106,59 @@ def filter_masks(masks, face_bbox: list[list[int]]):
             new_masks.append(masks[best_idx])
             idxs.append(best_idx)
     return new_masks, idxs
+
+
+def mapping_compositum(first: list, second: list):
+    new_mapping = [-1] * len(first)
+    for i, m1 in enumerate(first):
+        if m1 == -1:
+            continue
+        if m1 > len(second):
+            continue
+        new_mapping[i] = second[m1]
+    return new_mapping
+
+
+def mapping_bbox_masks(face_bbox: list[list[int]], masks):
+    if face_bbox is None:
+        print("No face bbox")
+        return masks, list(range(len(masks)))
+    print("NMASKS", len(masks), masks[0].shape)
+    print("FACE BBOX", face_bbox)
+    mapping = [-1] * len(face_bbox)
+    for n, bbox in enumerate(face_bbox):
+        best_idx = -1
+        best_coverage = 0
+        for i, mask in enumerate(masks):
+            bbox_img = np.zeros_like(mask, dtype=np.uint8)
+            bbox_img[bbox[1]:bbox[3], bbox[0]:bbox[2]] = 1
+            intersection = np.logical_and(mask, bbox_img)
+            union = np.logical_or(mask, bbox_img)
+            size = np.sum(intersection) / np.sum(union)
+            if size > best_coverage:
+                best_coverage = size
+                best_idx = i
+        if best_idx != -1:
+            mapping[n] = best_idx
+    return mapping
+
+
+def complete_mapping(mapping: list, max_num: int):
+    """
+    :param mapping: list of correspondences [-1, 3,2,4,-1,1]
+    :param max_num: maximum number in the map
+    :return: mapping with reduced -1s - use avaliable spots if any - up to max_num
+    """
+    new_mapping = mapping.copy()
+    remaining_vals = set(range(max_num + 1)) - set(mapping)
+    for i in range(len(mapping)):
+        if mapping[i] != -1:
+            continue
+        if len(remaining_vals) == 0:
+            return mapping
+        new_val = remaining_vals.pop()
+        new_mapping[i] = new_val
+    return new_mapping
 
 
 class MaskFromPoints:
@@ -162,22 +216,15 @@ class MaskFromPoints:
     FUNCTION = "poses_to_masks"
     CATEGORY = "Katalist Tools"
 
-    def poses_to_masks(self, pose_keypoint, use_keypoints, mask_width, mask_height, n_poses, dilate_iterations, mask_mapping=None, face_bbox=None):
+    def poses_to_masks(self, pose_keypoint, use_keypoints, mask_width, mask_height, n_poses, dilate_iterations,
+                       mask_mapping=None, face_bbox=None):
+        # mask sizes should be the same as the bbox source image
         height = pose_keypoint[0]['canvas_height']
         width = pose_keypoint[0]['canvas_width']
-        max_poses = None
-        if not mask_mapping:
-            max_poses = n_poses
-            # default is left to right
-            mask_mapping = [(i, i) for i in range(n_poses)]
-        mask_mapping = sorted(mask_mapping, key=lambda p: p[0])
-        if face_bbox:
-            # keep only the bboxes that are targets of the mask_mapping
-            to_keep = [p[1] for p in mask_mapping]
-            face_bbox = select_from_idx(face_bbox, to_keep)
-        print(face_bbox)
-        poses = filter_poses(pose_keypoint, max_poses)
-        print("len poses", len(poses[0]['people']))
+        poses = pose_keypoint
+        if not mask_mapping or not face_bbox:
+            poses = filter_poses(pose_keypoint, n_poses)
+        # 1. Get all masks for skeletons
         all_masks = []
         for person in poses[0]["people"]:
             body_points = person["pose_keypoints_2d"]
@@ -203,20 +250,25 @@ class MaskFromPoints:
             mask = cv2.resize(mask, (mask_width, mask_height), interpolation=cv2.INTER_NEAREST)
             all_masks.append(mask)
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
+
+        full_mapping = list(range(len(all_masks)))
         if face_bbox:
-            # mask sizes should be the same as the bbox source image
-            all_masks, idxs = filter_masks(all_masks, face_bbox)
-            poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxs]
+            full_mapping = mapping_bbox_masks(face_bbox, all_masks)
+            if mask_mapping:
+                full_mapping = mapping_compositum(mask_mapping, full_mapping)
+        full_mapping = complete_mapping(full_mapping, len(all_masks) - 1)
+
+        all_masks_mapped = []
+        for m in full_mapping:
+            if m == -1:
+                all_masks_mapped.append(np.zeros((mask_height, mask_width), dtype=np.float32))
+            else:
+                all_masks_mapped.append(all_masks[m])
+
+        poses_decoded = [poses_decoded[k] for k in full_mapping if k != -1]
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=False)
         pose_image = HWC3(pose_image)
         pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
-        all_masks_mapped = []
-        if face_bbox:
-            for mapping in mask_mapping:
-                if mapping[1] < len(all_masks):
-                    all_masks_mapped.append(all_masks[mapping[1]])
-        else:
-            all_masks_mapped = all_masks
         while len(all_masks_mapped) < 5:
             all_masks_mapped.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):

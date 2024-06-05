@@ -23,11 +23,16 @@ RESNET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 3, 1,
 RESNET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 3, 1, 1)
 
 
-def preprocess_image(image_batch: np.ndarray, resize=None):
-    """RGB image in the format [B, H, W, C], numpy ndarray, float32"""
-    if resize is not None:
-        w, h = resize
-        image_batch = np.array([cv2.resize(image, (w, h)) for image in image_batch])
+def preprocess_image(image_batch: list, resize=None):
+    """
+    turn list of torch images into a numpy batch
+    list of RGB images in the format [B, H, W, C], numpy ndarray, float32"""
+    if len(image_batch) == 0:
+        return []
+    if resize is None:
+        resize = image_batch[0].shape[1:3]
+    w, h = resize
+    image_batch = np.array([cv2.resize(image.numpy()[0], (w, h)) for image in image_batch])
     image_batch = image_batch.transpose((0, 3, 1, 2))  # BCHW format
     b = image_batch.shape[0]
     # Apply normalization for resnet
@@ -149,10 +154,10 @@ class FaceMatcher:
     def match_faces(self, input_faces: list, target_faces: list):
         if len(input_faces) == 0 or len(target_faces) == 0:
             return (None, )
-        input_faces = torch.cat(input_faces, dim=0)
-        input_faces = preprocess_image(input_faces.numpy(), resize=(160, 160))
-        target_faces = torch.cat(target_faces, dim=0)
-        target_faces = preprocess_image(target_faces.numpy(), resize=(160, 160))
+        # input_faces = torch.cat(input_faces, dim=0)
+        input_faces = preprocess_image(input_faces, resize=(160, 160))
+        # target_faces = torch.cat(target_faces, dim=0)
+        target_faces = preprocess_image(target_faces, resize=(160, 160))
         age_i, sex_i = self.model.predict_probs(input_faces)
         age_t, sex_t = self.model.predict_probs(target_faces)
         print("Age i: ", age_i)
@@ -167,8 +172,12 @@ class FaceMatcher:
         print("Distances: ", distances)
         rows, cols = scipy.optimize.linear_sum_assignment(distances)
         mapping = list(zip(rows, cols))
-        print("Face Mapping: ", mapping)
-        return (mapping,)
+        mapping = sorted(mapping, key=lambda x: x[0])  # not sure if needed
+        full_mapping = [-1] * len(input_faces)
+        for a, b in mapping:
+            full_mapping[a] = b
+        print("Face Mapping: ", full_mapping)
+        return (full_mapping,)
 
 
 class ShowPermutation:

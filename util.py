@@ -1,8 +1,23 @@
 import numpy as np
+import torch
+import torchvision
 
 
 def select_from_idx(elements: list, idx: list):
     return [elements[i] for i in idx if i < len(elements)]
+
+
+# def resize_image_list(img_list: list, new_size: tuple):
+#     """
+#     :param img_list: list of images
+#     :param new_size: (width, height)
+#     :return:
+#     """
+#     new_list = []
+#     for img in img_list:
+#         if torch.is_tensor(img):
+#             new_list.append(torchvision.resize)
+#         new_list.append((img, new_size))
 
 
 def HWC3(x):
