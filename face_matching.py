@@ -1,5 +1,6 @@
 import os
 
+import cv2
 import numpy as np
 import onnxruntime as ort
 import scipy
@@ -22,8 +23,11 @@ RESNET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 3, 1,
 RESNET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 3, 1, 1)
 
 
-def preprocess_image(image_batch: np.ndarray):
+def preprocess_image(image_batch: np.ndarray, resize=None):
     """RGB image in the format [B, H, W, C], numpy ndarray, float32"""
+    if resize is not None:
+        w, h = resize
+        image_batch = np.array([cv2.resize(image, (w, h)) for image in image_batch])
     image_batch = image_batch.transpose((0, 3, 1, 2))  # BCHW format
     b = image_batch.shape[0]
     # Apply normalization for resnet
@@ -121,11 +125,11 @@ class AgeSexInference2:
 class FaceMatcher:
     def __init__(self):
         print(folder_names_and_paths['onnx'])
-        # onnx_model_path = os.path.join(models_dir, "onnx", "age_sex.onnx")
-        onnx_models_path = os.path.join(models_dir, 'insightface', 'models', 'buffalo_l', 'genderage.onnx')
+        onnx_model_path = os.path.join(models_dir, "onnx", "model_inception_resnet.onnx")
+        # onnx_models_path = os.path.join(models_dir, 'insightface', 'models', 'buffalo_l', 'genderage.onnx')
         # age_sex_model_path = os.path.join(folder_names_and_paths['onnx'][0], 'age_sex.onnx')
-        # self.model = AgeSexInference(onnx_model_path)
-        self.model = AgeSexInference2(onnx_models_path)
+        self.model = AgeSexInference(onnx_model_path)
+        # self.model = AgeSexInference2(onnx_models_path)
 
     @classmethod
     def INPUT_TYPES(s):
@@ -144,9 +148,9 @@ class FaceMatcher:
 
     def match_faces(self, input_faces: list, target_faces: list):
         input_faces = torch.cat(input_faces, dim=0)
-        input_faces = preprocess_image(input_faces.numpy())
+        input_faces = preprocess_image(input_faces.numpy(), resize=(160, 160))
         target_faces = torch.cat(target_faces, dim=0)
-        target_faces = preprocess_image(target_faces.numpy())
+        target_faces = preprocess_image(target_faces.numpy(), resize=(160, 160))
         age_i, sex_i = self.model.predict_probs(input_faces)
         age_t, sex_t = self.model.predict_probs(target_faces)
         print("Age i: ", age_i)
