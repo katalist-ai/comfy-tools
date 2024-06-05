@@ -147,6 +147,8 @@ class FaceMatcher:
     CATEGORY = "Katalist Tools"
 
     def match_faces(self, input_faces: list, target_faces: list):
+        if len(input_faces) == 0 or len(target_faces) == 0:
+            return (None, )
         input_faces = torch.cat(input_faces, dim=0)
         input_faces = preprocess_image(input_faces.numpy(), resize=(160, 160))
         target_faces = torch.cat(target_faces, dim=0)

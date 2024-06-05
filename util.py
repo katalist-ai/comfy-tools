@@ -2,7 +2,7 @@ import numpy as np
 
 
 def select_from_idx(elements: list, idx: list):
-    return [elements[i] for i in idx]
+    return [elements[i] for i in idx if i < len(elements)]
 
 
 def HWC3(x):

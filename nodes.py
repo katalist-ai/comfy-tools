@@ -7,7 +7,7 @@ import torch
 from skimage.morphology import convex_hull_image
 
 from .pose_utils import draw_poses, decode_json_as_poses
-from .util import HWC3
+from .util import HWC3, select_from_idx
 
 
 def dilate_mask(mask, n):
@@ -114,7 +114,6 @@ class MaskFromPoints:
             'face+shoulders': [0, 1, 2, 5, 14, 15, 16, 17],
             'face+torso': [0, 1, 2, 5, 14, 15, 16, 17, 8, 11],
             'face': [0, 14, 15, 16, 17]
-
         }
 
     @classmethod
@@ -167,11 +166,18 @@ class MaskFromPoints:
         height = pose_keypoint[0]['canvas_height']
         width = pose_keypoint[0]['canvas_width']
         max_poses = None
-        if mask_mapping is None:
+        if not mask_mapping:
             max_poses = n_poses
+            # default is left to right
             mask_mapping = [(i, i) for i in range(n_poses)]
         mask_mapping = sorted(mask_mapping, key=lambda p: p[0])
+        if face_bbox:
+            # keep only the bboxes that are targets of the mask_mapping
+            to_keep = [p[1] for p in mask_mapping]
+            face_bbox = select_from_idx(face_bbox, to_keep)
+        print(face_bbox)
         poses = filter_poses(pose_keypoint, max_poses)
+        print("len poses", len(poses[0]['people']))
         all_masks = []
         for person in poses[0]["people"]:
             body_points = person["pose_keypoints_2d"]
@@ -197,17 +203,20 @@ class MaskFromPoints:
             mask = cv2.resize(mask, (mask_width, mask_height), interpolation=cv2.INTER_NEAREST)
             all_masks.append(mask)
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
-        all_masks_mapped = []
-        if face_bbox is not None:
+        if face_bbox:
             # mask sizes should be the same as the bbox source image
             all_masks, idxs = filter_masks(all_masks, face_bbox)
             poses_decoded = [p for i, p in enumerate(poses_decoded) if i in idxs]
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=False)
         pose_image = HWC3(pose_image)
         pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
-        for mapping in mask_mapping:
-            if mapping[1] < len(all_masks):
-                all_masks_mapped.append(all_masks[mapping[1]])
+        all_masks_mapped = []
+        if face_bbox:
+            for mapping in mask_mapping:
+                if mapping[1] < len(all_masks):
+                    all_masks_mapped.append(all_masks[mapping[1]])
+        else:
+            all_masks_mapped = all_masks
         while len(all_masks_mapped) < 5:
             all_masks_mapped.append(np.zeros((height, width), dtype=np.float32))
         for i in range(5):
