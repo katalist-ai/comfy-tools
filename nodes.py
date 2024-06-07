@@ -4,10 +4,15 @@ from copy import deepcopy
 import cv2
 import numpy as np
 import torch
+from collections import namedtuple
 from skimage.morphology import convex_hull_image
 
 from .pose_utils import draw_poses, decode_json_as_poses
 from .util import HWC3
+
+SEG = namedtuple("SEG",
+                 ['cropped_image', 'cropped_mask', 'confidence', 'crop_region', 'bbox', 'label', 'control_net_wrapper'],
+                 defaults=[None])
 
 
 def dilate_mask(mask, n):
@@ -287,7 +292,6 @@ class FilterPoses:
         return {
             "required": {
                 "pose_keypoint": ("POSE_KEYPOINT",),
-                "permutation": ("PERMUTATION",),
                 "n_poses": ("INT", {
                     "default": 1,
                     "min": 1,  # Minimum value
@@ -308,9 +312,10 @@ class FilterPoses:
         width = pose_keypoint[0]['canvas_width']
         poses = filter_poses(pose_keypoint, n_poses)
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
-        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=False, draw_hand=False)
+        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=True)
         pose_image = HWC3(pose_image)
-        return torch.tensor(pose_image).unsqueeze(0), poses
+        pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
+        return pose_image, poses
 
 
 class LoadPosesJSON:
@@ -353,3 +358,67 @@ class LoadPosesJSON:
             pose_dict = [pose_dict]
         print(pose_dict, type(pose_dict))
         return (pose_dict,)
+    
+
+class MaskListToMask:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mask": ("MASK",),
+            }
+        }
+    INPUT_IS_LIST = True
+    RETURN_TYPES = ("MASK", "MASK", "MASK", "MASK", "MASK")
+    RETURN_NAMES = ("MASK1", "MASK2", "MASK3", "MASK4", "MASK5")
+    FUNCTION = "mask_list_to_mask"
+    CATEGORY = "Katalist Tools"
+
+    def mask_list_to_mask(self, mask):
+        if len(mask) == 0:
+            return (torch.zeros((1, 512, 512)),) * 5
+        _, w, h = mask[0].shape
+        missing = 5 - len(mask)
+        if missing > 0:
+            mask += [torch.zeros((1, w, h)) for _ in range(missing)]
+        return tuple(mask)
+    
+class SegsListToSegs:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "segs": ("SEGS",),
+            }
+        }
+    RETURN_TYPES = ("SEGS", "SEGS", "SEGS", "SEGS", "SEGS")
+    RETURN_NAMES = ("SEGS1", "SEGS2", "SEGS3", "SEGS4", "SEGS5")
+    FUNCTION = "segs_list_to_segs"
+    CATEGORY = "Katalist Tools"
+
+    def segs_list_to_segs(self, segs):
+        if len(segs) == 0:
+            empty_seg = ((1024, 1024), [])
+            return (empty_seg,) * 5
+
+        w, h = segs[0]
+        seglist = segs[1]
+        missing = 5 - len(seglist)
+        new_segs = []
+        for seg in seglist:
+            if seg is None:
+                new_segs.append(None)
+            else:
+                new_segs.append(((w, h), [seg]))
+        while missing > 0:
+            new_segs.append(((1024, 1024), []))
+            missing -= 1
+        return tuple(new_segs)
+
+

@@ -1,4 +1,4 @@
-from .nodes import MaskFromPoints, FilterPoses, LoadPosesJSON
+from .nodes import MaskFromPoints, FilterPoses, LoadPosesJSON, MaskListToMask, SegsListToSegs
 from .face_matching import FaceMatcher, ShowPermutation
 
 NODE_CLASS_MAPPINGS = {
@@ -6,7 +6,9 @@ NODE_CLASS_MAPPINGS = {
     "FilterPoses": FilterPoses,
     "LoadPosesJSON": LoadPosesJSON,
     "FaceMatcher": FaceMatcher,
-    "ShowPermutation": ShowPermutation
+    "ShowPermutation": ShowPermutation,
+    "MaskListToMask": MaskListToMask,
+    "SegsListToSegs": SegsListToSegs
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
@@ -15,7 +17,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FilterPoses": "Filter Poses",
     "LoadPosesJSON": "Load Poses JSON",
     "FaceMatcher": "Face Matcher",
-    "ShowPermutation": "Show Permutation"
+    "ShowPermutation": "Show Permutation",
+    "MaskListToMask": "Mask List To Mask",
+    "SegsListToSegs": "Segs List To Segs"
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
