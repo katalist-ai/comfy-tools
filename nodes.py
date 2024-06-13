@@ -91,8 +91,6 @@ def filter_masks(masks, face_bbox: list[list[int]]):
     if face_bbox is None:
         print("No face bbox")
         return masks, list(range(len(masks)))
-    print("NMASKS", len(masks))
-    print("FACE BBOX", face_bbox)
     new_masks = []
     idxs = []
     for bbox in face_bbox:
@@ -128,8 +126,6 @@ def mapping_bbox_masks(face_bbox: list[list[int]], masks):
     if face_bbox is None:
         print("No face bbox")
         return masks, list(range(len(masks)))
-    print("NMASKS", len(masks), masks[0].shape)
-    print("FACE BBOX", face_bbox)
     mapping = [-1] * len(face_bbox)
     for n, bbox in enumerate(face_bbox):
         best_idx = -1
@@ -356,7 +352,6 @@ class LoadPosesJSON:
         self.validate_poses(pose_dict)
         if not isinstance(pose_dict, list):
             pose_dict = [pose_dict]
-        print(pose_dict, type(pose_dict))
         return (pose_dict,)
     
 

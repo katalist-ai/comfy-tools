@@ -116,7 +116,6 @@ class AgeSexInference2:
     def predict(self, image: np.ndarray):
         """RGB image in the format [B, C, H, W], numpy ndarray"""
         out = self.model.run(None, {'data': image})[0]
-        print(out)
         # age in the output is float
         age = select_age_group(out[:, 2] * 100)
         sex = softmax(out[:, :2])
@@ -129,7 +128,6 @@ class AgeSexInference2:
 
 class FaceMatcher:
     def __init__(self):
-        print(folder_names_and_paths['onnx'])
         onnx_model_path = os.path.join(models_dir, "onnx", "model_inception_resnet.onnx")
         # onnx_models_path = os.path.join(models_dir, 'insightface', 'models', 'buffalo_l', 'genderage.onnx')
         # age_sex_model_path = os.path.join(folder_names_and_paths['onnx'][0], 'age_sex.onnx')
@@ -204,7 +202,6 @@ class ShowPermutation:
 
 def main():
     img = torch.zeros(1, 5, 5, 3)
-    print(preprocess_image(img.numpy()))
 
 
 if __name__ == '__main__':
