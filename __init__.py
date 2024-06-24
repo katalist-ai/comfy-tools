@@ -1,4 +1,7 @@
-from .nodes import MaskFromPoints, FilterPoses, LoadPosesJSON, MaskListToMask, SegsListToSegs
+from .nodes import (MaskFromPoints, FilterPoses, LoadPosesJSON, 
+                MaskListToMask, SegsListToSegs, BBOXSelector,
+                PreviewBBOX
+                )
 from .face_matching import FaceMatcher, ShowPermutation
 
 NODE_CLASS_MAPPINGS = {
@@ -8,7 +11,9 @@ NODE_CLASS_MAPPINGS = {
     "FaceMatcher": FaceMatcher,
     "ShowPermutation": ShowPermutation,
     "MaskListToMask": MaskListToMask,
-    "SegsListToSegs": SegsListToSegs
+    "SegsListToSegs": SegsListToSegs,
+    "BBOXSelector": BBOXSelector,
+    "PreviewBBOX": PreviewBBOX
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
@@ -19,7 +24,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FaceMatcher": "Face Matcher",
     "ShowPermutation": "Show Permutation",
     "MaskListToMask": "Mask List To Mask",
-    "SegsListToSegs": "Segs List To Segs"
+    "SegsListToSegs": "Segs List To Segs",
+    "BBOXSelector": "BBOX Selector",
+    "PreviewBBOX": "Preview BBOX"
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']

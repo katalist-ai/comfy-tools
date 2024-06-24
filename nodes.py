@@ -250,7 +250,6 @@ class MaskFromPoints:
                 mask = dilate_mask(mask, dilate_iterations)
             mask = cv2.resize(mask, (mask_width, mask_height), interpolation=cv2.INTER_NEAREST)
             all_masks.append(mask)
-        poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
 
         full_mapping = list(range(len(all_masks)))
         if face_bbox:
@@ -266,6 +265,7 @@ class MaskFromPoints:
             else:
                 all_masks_mapped.append(all_masks[m])
 
+        poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
         poses_decoded = [poses_decoded[k] for k in full_mapping if k != -1]
         pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=False)
         pose_image = HWC3(pose_image)
@@ -308,7 +308,7 @@ class FilterPoses:
         width = pose_keypoint[0]['canvas_width']
         poses = filter_poses(pose_keypoint, n_poses)
         poses_decoded, _, _ = decode_json_as_poses(poses[0], normalize_coords=True)
-        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=True)
+        pose_image = draw_poses(poses_decoded, height, width, draw_body=True, draw_face=True, draw_hand=False)
         pose_image = HWC3(pose_image)
         pose_image = torch.from_numpy(pose_image.astype(np.float32) / 255.0).unsqueeze(0)
         return pose_image, poses
@@ -415,5 +415,93 @@ class SegsListToSegs:
             new_segs.append(((1024, 1024), []))
             missing -= 1
         return tuple(new_segs)
+    
+class BBOXSelector:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "bbox": ("BBOXLIST",),
+                "idx": ("INT", {
+                    "default": 0,
+                    "min": 0,  # Minimum value
+                    "max": 9999,  # Maximum value
+                    "step": 1,  # Slider's step
+                    "display": "number"  # Cosmetic only: display as "number" or "slider"
+                }),
+            },
+            "optional": {
+                "mapping": ("MAPPING",),
+            }
+        }
+    RETURN_TYPES = ("BBOXLIST",)
+    RETURN_NAMES = ("bbox",)
+    FUNCTION = "select_bbox"
+    CATEGORY = "Katalist Tools"
+
+    def select_bbox(self, bbox, idx, mapping=None):
+        print(f"N bboxes: {len(bbox)}")
+        if mapping is None:
+            mapping = list(range(len(bbox)))
+        if len(bbox) == 0:
+            print('No bbox')
+            return ([], )
+        if len(mapping) == 0:
+            print("empty mapping")
+            return (bbox, )
+        if idx >= len(mapping):
+            return []
+        if mapping[idx] == -1:
+            return ([], )
+        if mapping[idx] >= len(bbox):
+            print("mapping out of range")
+            return ([], )
+        res = ([bbox[mapping[idx]]],)
+        print(f"BBOX selected: {res}")
+        return res
+    
+class PreviewBBOX:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "bbox": ("BBOXLIST",),
+                "width": ("INT", {
+                    "default": 1024,
+                    "min": 0,  # Minimum value
+                    "max": 2000,  # Maximum value
+                    "step": 1,  # Slider's step
+                    "display": "number"  # Cosmetic only: display as "number" or "slider"
+                }),
+                "height": ("INT", {
+                    "default": 1024,
+                    "min": 0,  # Minimum value
+                    "max": 2000,  # Maximum value
+                    "step": 1,  # Slider's step
+                    "display": "number"  # Cosmetic only: display as "number" or "slider"
+                }),
+            }
+        }
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("IMAGE",)
+    FUNCTION = "preview_bbox"
+    OUTPUT_NODE = True
+    CATEGORY = "Katalist Tools"
+    
+    def preview_bbox(self, bbox, width, height):
+        for b in bbox:
+            if len(b) != 4:
+                raise ValueError(f"BBOX should have 4 elements, {b}")
+        img = torch.zeros(1, height, width, 3)
+        for b in bbox:
+            img[:, b[1]:b[3], b[0]:b[2], :] = 1.0
+        return (img,)
+
 
 
