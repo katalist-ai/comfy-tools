@@ -3,6 +3,7 @@ from .nodes import (MaskFromPoints, FilterPoses, LoadPosesJSON,
                 PreviewBBOX
                 )
 from .face_matching import FaceMatcher, ShowPermutation
+from .flux_image_gen import FalFluxNode
 
 NODE_CLASS_MAPPINGS = {
     "MaskFromPoints": MaskFromPoints,
@@ -13,7 +14,8 @@ NODE_CLASS_MAPPINGS = {
     "MaskListToMask": MaskListToMask,
     "SegsListToSegs": SegsListToSegs,
     "BBOXSelector": BBOXSelector,
-    "PreviewBBOX": PreviewBBOX
+    "PreviewBBOX": PreviewBBOX,
+    "FalFluxNode": FalFluxNode
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
@@ -26,7 +28,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MaskListToMask": "Mask List To Mask",
     "SegsListToSegs": "Segs List To Segs",
     "BBOXSelector": "BBOX Selector",
-    "PreviewBBOX": "Preview BBOX"
+    "PreviewBBOX": "Preview BBOX",
+    "FalFluxNode": "Fal Flux Image Generator"
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
