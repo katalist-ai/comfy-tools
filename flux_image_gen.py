@@ -12,6 +12,7 @@ class FalFluxNode:
             "required": {
                 "width": ("INT",{"default": 1024}),
                 "height": ("INT",{ "default": 1024}),
+                "seed": ("INT", {"default": 0}),
                 "prompt": ("STRING", {"multiline": True}),
                 "model": (["pro", "dev", "schnell"], {"default": "schnell"}),
             },
@@ -21,13 +22,14 @@ class FalFluxNode:
     FUNCTION = "generate_image"
     CATEGORY = "Katalist Tools"
 
-    def generate_image(self, width, height, prompt, model):
+    def generate_image(self, width, height, seed, prompt, model):
         url = 'fal-ai/flux'
         if model == 'dev':
             url = 'fal-ai/flux/dev'
         elif model == 'schnell':
             url = 'fal-ai/flux/schnell'
 
+        # payload
         handler = fal_client.submit(
             url,
             arguments={
@@ -36,7 +38,8 @@ class FalFluxNode:
                     "width": width,
                     "height": height
                 },
-                "sync_mode": True
+                "sync_mode": True,
+                "seed": seed
             },
         )
 
