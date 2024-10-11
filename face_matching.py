@@ -1,17 +1,21 @@
 import os
-import numpy as np
-import torch
-import torch.nn.functional as F
-import torchvision.transforms.v2 as T
-from PIL import Image, ImageDraw, ImageFont, ImageColor
-from insightface.app import FaceAnalysis
-from scipy.spatial.distance import cosine
 
-INSIGHTFACE_DIR = os.path.join(folder_paths.models_dir, "insightface")
+import cv2
+import numpy as np
+import onnxruntime as ort
+import scipy
+import torch
+from folder_paths import models_dir, folder_names_and_paths
+from scipy.stats import entropy
+from insightface.app import FaceAnalysis
+import torchvision.transforms.v2 as T
+
+INSIGHTFACE_DIR = os.path.join(models_dir, "insightface")
+
 
 class FaceMatcher:
     def __init__(self):
-        self.face_analysis = FaceAnalysis(name="buffalo_l", root=INSIGHTFACE_DIR, providers=['CPUExecutionProvider'])
+        self.face_analysis = FaceAnalysis(name="antelopev2", root=INSIGHTFACE_DIR, providers=['CPUExecutionProvider'])
         self.face_analysis.prepare(ctx_id=0, det_size=(640, 640))
         self.thresholds = {
             "cosine": 0.68,
@@ -21,19 +25,18 @@ class FaceMatcher:
 
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {
-            "input_faces": ("IMAGE",),
-            "target_faces": ("IMAGE",),
-            "similarity_metric": (["cosine", "euclidean", "L2_norm"],),
-            "filter_thresh": ("FLOAT", {"default": 1.0, "min": 0.001, "max": 100.0, "step": 0.001}),
-            "filter_best": ("INT", {"default": 0, "min": 0, "max": 4096, "step": 1}),
-            "generate_image_overlay": ("BOOLEAN", {"default": True}),
-        }}
+        return {
+            "required": {
+                "input_faces": ("IMAGE",),
+                "target_faces": ("IMAGE",),
+            },
+        }
 
-    RETURN_TYPES = ("IMAGE", "FLOAT")
-    RETURN_NAMES = ("IMAGE", "distance")
+    INPUT_IS_LIST = (True, True)
+    RETURN_TYPES = ("MAPPING",)
+    RETURN_NAMES = ("MAPPING",)
     FUNCTION = "match_faces"
-    CATEGORY = "FaceAnalysis"
+    CATEGORY = "Katalist Tools"
 
     def get_face(self, image):
         for size in [(size, size) for size in range(640, 256, -64)]:
@@ -49,82 +52,58 @@ class FaceMatcher:
             return face[0].normed_embedding
         return None
 
-    def match_faces(self, input_faces, target_faces, similarity_metric, filter_thresh, filter_best, generate_image_overlay=True):
-        if generate_image_overlay:
-            font = ImageFont.truetype(os.path.join(os.path.dirname(os.path.realpath(__file__)), "Inconsolata.otf"), 32)
-            background_color = ImageColor.getrgb("#000000AA")
-            txt_height = font.getmask("Q").getbbox()[3] + font.getmetrics()[1]
+    def match_faces(self, input_faces: list, target_faces: list):
+        # use insight face to get face for each input and target
+        input_faces = [self.get_embeds(np.array(T.ToPILImage()(face[0].permute(2, 0, 1)).convert('RGB'))) for face in input_faces]
+        target_faces = [self.get_embeds(np.array(T.ToPILImage()(face[0].permute(2, 0, 1)).convert('RGB'))) for face in target_faces]
 
-        if filter_thresh == 0.0:
-            filter_thresh = self.thresholds[similarity_metric]
-
-        ref = []
-        for i in input_faces:
-            ref_emb = self.get_embeds(np.array(T.ToPILImage()(i.permute(2, 0, 1)).convert('RGB')))
-            if ref_emb is not None:
-                ref.append(torch.from_numpy(ref_emb))
+        # find euclidean distance between each input and target
+        distances = []
+        for i, input_face in enumerate(input_faces):
+            for j, target_face in enumerate(target_faces):
+                dist = np.linalg.norm(input_face - target_face)
+                print(f'the distance between input {i} and target {j} is {dist}')
+                distances.append((dist, i, j))
         
-        if not ref:
-            raise Exception('No face detected in reference image')
+        # assign pairs based on least distance
+        distances.sort(key=lambda x: x[0])
+        mapping = [-1] * len(input_faces)
+        used_targets = set()
+        used_inputs = set()
 
-        ref = torch.stack(ref)
-        ref = np.array(torch.mean(ref, dim=0))
+        # First pass: assign each input to the closest available target
+        for dist, input_idx, target_idx in distances:
+            if target_idx not in used_targets and input_idx not in used_inputs:
+                mapping[input_idx] = target_idx
+                used_targets.add(target_idx)
+                used_inputs.add(input_idx)
 
-        out = []
-        out_dist = []
-        
-        for i in target_faces:
-            img = np.array(T.ToPILImage()(i.permute(2, 0, 1)).convert('RGB'))
-            img_emb = self.get_embeds(img)
+        # Second pass: ensure all targets are used
+        for target_idx in range(len(target_faces)):
+            if target_idx not in used_targets:
+                for input_idx in range(len(input_faces)):
+                    if mapping[input_idx] == -1:
+                        mapping[input_idx] = target_idx
+                        used_targets.add(target_idx)
+                        break
 
-            if img_emb is None:
-                dist = 100.0
-                norm_dist = 0
-            else:
-                if np.array_equal(ref, img_emb):
-                    dist = 0.0
-                    norm_dist = 0.0
-                else:
-                    if similarity_metric == "L2_norm":
-                        ref_norm = ref / np.linalg.norm(ref)
-                        img_norm = img_emb / np.linalg.norm(img_emb)
-                        dist = np.float64(np.linalg.norm(ref_norm - img_norm))
-                    elif similarity_metric == "cosine":
-                        dist = np.float64(cosine(ref, img_emb))
-                    else:  # euclidean
-                        dist = np.float64(np.linalg.norm(ref - img_emb))
-                    
-                    norm_dist = min(1.0, dist / self.thresholds[similarity_metric])
-           
-            if dist <= filter_thresh:
-                print(f"\033[96mFace Analysis: value: {dist}, normalized: {norm_dist}\033[0m")
+        print("Face Mapping: ", mapping)
+        return (mapping,)
 
-                if generate_image_overlay:
-                    tmp = T.ToPILImage()(i.permute(2, 0, 1)).convert('RGBA')
-                    txt = Image.new('RGBA', (target_faces.shape[2], txt_height), color=background_color)
-                    draw = ImageDraw.Draw(txt)
-                    draw.text((0, 0), f"VALUE: {round(dist, 3)} | DIST: {round(norm_dist, 3)}", font=font, fill=(255, 255, 255, 255))
-                    composite = Image.new('RGBA', tmp.size)
-                    composite.paste(txt, (0, tmp.height - txt.height))
-                    composite = Image.alpha_composite(tmp, composite)
-                    out.append(T.ToTensor()(composite).permute(1, 2, 0))
-                else:
-                    out.append(i)
 
-                out_dist.append(dist)
+class ShowPermutation:
+    def __init__(self):
+        pass
 
-        if not out:
-            raise Exception('No image matches the filter criteria.')
-    
-        out = torch.stack(out)
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mapping": ("MAPPING",),
+            },
+        }
 
-        if filter_best > 0:
-            filter_best = min(filter_best, len(out))
-            out_dist, idx = torch.topk(torch.tensor(out_dist), filter_best, largest=False)
-            out = out[idx]
-            out_dist = out_dist.cpu().numpy().tolist()
-        
-        if out.shape[3] > 3:
-            out = out[:, :, :, :3]
-
-        return (out, out_dist)
+    RETURN_TYPES = ()
+    OUTPUT_NODE = True
+    FUNCTION = "show_mapping"
+    CATEGORY = "Katalist Tools"
