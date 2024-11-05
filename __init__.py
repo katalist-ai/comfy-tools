@@ -4,7 +4,7 @@ from .nodes import (MaskFromPoints, FilterPoses, LoadPosesJSON,
                 )
 from .face_matching import FaceMatcher, ShowPermutation
 from .flux_image_gen import FalFluxNode
-
+from .websocket_pose import SavePoseWebsocket
 NODE_CLASS_MAPPINGS = {
     "MaskFromPoints": MaskFromPoints,
     "FilterPoses": FilterPoses,
@@ -15,7 +15,8 @@ NODE_CLASS_MAPPINGS = {
     "SegsListToSegs": SegsListToSegs,
     "BBOXSelector": BBOXSelector,
     "PreviewBBOX": PreviewBBOX,
-    "FalFluxNode": FalFluxNode
+    "FalFluxNode": FalFluxNode,
+    "SavePoseWebsocket": SavePoseWebsocket
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
