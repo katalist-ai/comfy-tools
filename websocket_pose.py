@@ -1,5 +1,6 @@
 import json
 from .skeleton_extrapolation import InferenceRequest, inference
+from .skeleton_extrapolation.schema import Keypoint
 
 class SavePoseWebsocket:
     @classmethod
@@ -25,6 +26,17 @@ class SavePoseWebsocket:
             
         return pose_str
     
+def translate_output(keypoints):
+    body_skeleton_keypoints = []
+    for body in keypoints:
+        new_body = []
+        for point in body:
+            visible: bool = bool(point[2] > 0.3)
+            new_body.append({"x": point[0], "y": point[1], "visible": visible})
+        body_skeleton_keypoints.append(new_body)
+    return {"body_skeleton_keypoints": body_skeleton_keypoints}
+
+    
 class ExtrapolateOffscreenKeypoints:
     @classmethod
     def INPUT_TYPES(s):
@@ -42,22 +54,57 @@ class ExtrapolateOffscreenKeypoints:
     CATEGORY = "api/pose"
 
     def extrapolate_offscreen_keypoints(self, pose_keypoint, width, height):
-        idx_has_neck = []
-        for i, body in enumerate(pose_keypoint):
-            if not body[1]["visible"]:
+
+        bodies = []
+        print(pose_keypoint)
+        print('pose_keypoint ^')
+        for person in pose_keypoint[0]['people']:
+            body = []
+            
+            keypoints = [person['pose_keypoints_2d'][i:i+3] for i in range(0, len(person['pose_keypoints_2d']), 3)]
+
+            print(keypoints)
+            print('keypoints ^')
+            if keypoints[0][2] < 0.3:
                 continue
-            idx_has_neck.append(i)
-        request = InferenceRequest(keypoints=pose_keypoint, width=width, height=height)
+
+            for keypoint in keypoints:
+                body.append(Keypoint(x=keypoint[0], y=keypoint[1], visible=bool(keypoint[2] > 0.3)))
+                print(body[-1])
+                print('point ^')
+            bodies.append(body)
+        
+        if len(bodies) == 0:
+            return pose_keypoint
+
+        request = InferenceRequest(keypoints=bodies, width=width, height=height)
         keypoints = inference(request)
-        for idx in idx_has_neck:
-            pose_keypoint[idx] = keypoints[idx]
-        return pose_keypoint
+
+        
+        out = []
+        for body in keypoints:
+            out_body = []
+            for keypoint in body:
+                out_body.append(keypoint.x)
+                out_body.append(keypoint.y)
+                out_body.append(keypoint.visible)
+            out.append({
+                "pose_keypoints_2d": out_body
+            })
+
+        return [{
+            "people": out,
+            "canvas_width": width,
+            "canvas_height": height
+        }]
 
 NODE_CLASS_MAPPINGS = {
     "SavePoseWebsocket": SavePoseWebsocket,
+    "ExtrapolateOffscreenKeypoints": ExtrapolateOffscreenKeypoints
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "SavePoseWebsocket": "Save Pose to Websocket"
+    "SavePoseWebsocket": "Save Pose to Websocket",
+    "ExtrapolateOffscreenKeypoints": "Extrapolate Offscreen Keypoints"
 }
 
