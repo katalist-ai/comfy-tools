@@ -56,22 +56,17 @@ class ExtrapolateOffscreenKeypoints:
     def extrapolate_offscreen_keypoints(self, pose_keypoint, width, height):
 
         bodies = []
-        print(pose_keypoint)
-        print('pose_keypoint ^')
+
         for person in pose_keypoint[0]['people']:
             body = []
             
             keypoints = [person['pose_keypoints_2d'][i:i+3] for i in range(0, len(person['pose_keypoints_2d']), 3)]
 
-            print(keypoints)
-            print('keypoints ^')
             if keypoints[0][2] < 0.3:
                 continue
 
             for keypoint in keypoints:
                 body.append(Keypoint(x=keypoint[0], y=keypoint[1], visible=bool(keypoint[2] > 0.3)))
-                print(body[-1])
-                print('point ^')
             bodies.append(body)
         
         if len(bodies) == 0:
