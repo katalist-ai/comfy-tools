@@ -50,7 +50,7 @@ class ExtrapolateOffscreenKeypoints:
     
     RETURN_TYPES = ("POSE_KEYPOINT",)
     FUNCTION = "extrapolate_offscreen_keypoints"
-    OUTPUT_NODE = True
+    OUTPUT_NODE = False
     CATEGORY = "api/pose"
 
     def extrapolate_offscreen_keypoints(self, pose_keypoint, width, height):
