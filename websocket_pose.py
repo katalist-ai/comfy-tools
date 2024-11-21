@@ -1,6 +1,7 @@
 import json
 from .skeleton_extrapolation import InferenceRequest, inference
 from .skeleton_extrapolation.schema import Keypoint
+from server import PromptServer
 
 class SavePoseWebsocket:
     @classmethod
@@ -23,7 +24,8 @@ class SavePoseWebsocket:
             "version": 1,
             "data": pose_keypoint
         })
-            
+        server = PromptServer.instance
+        server.send_sync("executed", pose_keypoint, server.client_id)
         return pose_str
     
 def translate_output(keypoints):
