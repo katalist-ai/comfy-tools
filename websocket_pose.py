@@ -18,14 +18,8 @@ class SavePoseWebsocket:
     CATEGORY = "api/pose"
 
     def save_pose(self, pose_keypoint):
-        # Create progress bar
-        pose_str = json.dumps({
-            "type": "pose_data",
-            "version": 1,
-            "data": pose_keypoint
-        })
         server = PromptServer.instance
-        server.send_sync("executed", pose_keypoint, server.client_id)
+        server.send_sync("executed", {"node":"SavePoseWebsocket","output":pose_keypoint}, server.client_id)
         return pose_str
     
 def translate_output(keypoints):
