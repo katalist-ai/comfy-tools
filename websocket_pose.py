@@ -20,7 +20,7 @@ class SavePoseWebsocket:
     def save_pose(self, pose_keypoint):
         server = PromptServer.instance
         server.send_sync("executed", {"node":"SavePoseWebsocket","output":pose_keypoint}, server.client_id)
-        return pose_str
+        return pose_keypoint
     
 def translate_output(keypoints):
     body_skeleton_keypoints = []
