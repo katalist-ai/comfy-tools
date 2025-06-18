@@ -129,10 +129,10 @@ class AgeSexInference2:
 class FaceMatcher:
     def __init__(self):
         onnx_model_path = os.path.join(models_dir, "onnx", "model_inception_resnet.onnx")
-        # onnx_models_path = os.path.join(models_dir, 'insightface', 'models', 'buffalo_l', 'genderage.onnx')
+        onnx_models_path = os.path.join(models_dir, 'insightface', 'models', 'antelopev2', 'genderage.onnx')
         # age_sex_model_path = os.path.join(folder_names_and_paths['onnx'][0], 'age_sex.onnx')
         self.model = AgeSexInference(onnx_model_path)
-        # self.model = AgeSexInference2(onnx_models_path)
+        self.model2 = AgeSexInference2(onnx_models_path)
 
     @classmethod
     def INPUT_TYPES(s):
@@ -153,20 +153,45 @@ class FaceMatcher:
         if len(input_faces) == 0 or len(target_faces) == 0:
             return (None, )
         # input_faces = torch.cat(input_faces, dim=0)
-        input_faces = preprocess_image(input_faces, resize=(160, 160))
+        input_faces_processed = preprocess_image(input_faces, resize=(160, 160))
         # target_faces = torch.cat(target_faces, dim=0)
-        target_faces = preprocess_image(target_faces, resize=(160, 160))
-        age_i, sex_i = self.model.predict_probs(input_faces)
-        age_t, sex_t = self.model.predict_probs(target_faces)
-        print("Age i: ", age_i)
-        print("Age t: ", age_t)
-        print("Sex i", sex_i)
-        print("Sex t", sex_t)
+        target_faces_processed = preprocess_image(target_faces, resize=(160, 160))
+        
+        # Preprocess images for buffalo_l model (96x96)
+        input_faces_processed2 = preprocess_image(input_faces, resize=(96, 96))
+        target_faces_processed2 = preprocess_image(target_faces, resize=(96, 96))
+        
+        # Get predictions from first model (inception resnet)
+        age_i, sex_i = self.model.predict_probs(input_faces_processed)
+        age_t, sex_t = self.model.predict_probs(target_faces_processed)
+        
+        # Get predictions from second model (buffalo_l)
+        age_i2, sex_i2 = self.model2.predict_probs(input_faces_processed2)
+        age_t2, sex_t2 = self.model2.predict_probs(target_faces_processed2)
+        
+        print("Model 1 - Age i: ", age_i)
+        print("Model 1 - Age t: ", age_t)
+        print("Model 1 - Sex i", sex_i)
+        print("Model 1 - Sex t", sex_t)
+        print("Model 2 - Age i: ", age_i2)
+        print("Model 2 - Age t: ", age_t2)
+        print("Model 2 - Sex i", sex_i2)
+        print("Model 2 - Sex t", sex_t2)
+        
         distances = np.zeros((len(input_faces), len(target_faces)))
         for i in range(len(input_faces)):
             for j in range(len(target_faces)):
-                distances[i, j] = (0.7 * js_divergence(age_i[i], age_t[j]) +
-                                   0.3 * js_divergence(sex_i[i], sex_t[j]))
+                # Distance from model 1
+                dist1 = (0.4 * js_divergence(age_i[i], age_t[j]) +
+                         0.6 * js_divergence(sex_i[i], sex_t[j]))
+                
+                # Distance from model 2 (buffalo_l)
+                dist2 = (0.4 * js_divergence(age_i2[i], age_t2[j]) +
+                         0.6 * js_divergence(sex_i2[i], sex_t2[j]))
+                
+                # Combine both models with equal weight
+                distances[i, j] = 0.5 * dist1 + 0.5 * dist2
+                
         print("Distances: ", distances)
         rows, cols = scipy.optimize.linear_sum_assignment(distances)
         mapping = list(zip(rows, cols))

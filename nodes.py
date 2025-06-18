@@ -252,10 +252,9 @@ class MaskFromPoints:
             all_masks.append(mask)
 
         full_mapping = list(range(len(all_masks)))
-        if face_bbox:
-            full_mapping = mapping_bbox_masks(face_bbox, all_masks)
-            if mask_mapping:
-                full_mapping = mapping_compositum(mask_mapping, full_mapping)
+
+        if mask_mapping:
+            full_mapping = mapping_compositum(mask_mapping, full_mapping)
         full_mapping = complete_mapping(full_mapping, len(all_masks) - 1)
 
         all_masks_mapped = []
