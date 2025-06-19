@@ -152,6 +152,7 @@ class FaceMatcher:
     def match_faces(self, input_faces: list, target_faces: list):
         if len(input_faces) == 0 or len(target_faces) == 0:
             return (None, )
+        target_faces = target_faces[:len(input_faces)]
         # input_faces = torch.cat(input_faces, dim=0)
         input_faces_processed = preprocess_image(input_faces, resize=(160, 160))
         # target_faces = torch.cat(target_faces, dim=0)
