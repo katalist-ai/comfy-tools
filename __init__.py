@@ -5,6 +5,7 @@ from .nodes import (MaskFromPoints, FilterPoses, LoadPosesJSON,
 from .face_matching import FaceMatcher, ShowPermutation
 from .flux_image_gen import FalFluxNode
 from .websocket_pose import SavePoseWebsocket, ExtrapolateOffscreenKeypoints
+from .csv_loader import CSVLoader
 NODE_CLASS_MAPPINGS = {
     "MaskFromPoints": MaskFromPoints,
     "FilterPoses": FilterPoses,
@@ -17,7 +18,8 @@ NODE_CLASS_MAPPINGS = {
     "PreviewBBOX": PreviewBBOX,
     "FalFluxNode": FalFluxNode,
     "SavePoseWebsocket": SavePoseWebsocket,
-    "ExtrapolateOffscreenKeypoints": ExtrapolateOffscreenKeypoints
+    "ExtrapolateOffscreenKeypoints": ExtrapolateOffscreenKeypoints,
+    "CSVLoader": CSVLoader
 }
 
 # A dictionary that contains the friendly/humanly readable titles for the nodes
@@ -33,7 +35,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "PreviewBBOX": "Preview BBOX",
     "FalFluxNode": "Fal Flux Image Generator",
     "SavePoseWebsocket": "Save Pose Websocket",
-    "ExtrapolateOffscreenKeypoints": "Extrapolate Offscreen Keypoints"
+    "ExtrapolateOffscreenKeypoints": "Extrapolate Offscreen Keypoints",
+    "CSVLoader": "CSV Loader"
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
